@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio de Pixel Art do Lucão</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121214; /* Escuro profundo */
+            color: #e1e1e6;
+            margin: 0;
+            overflow: hidden; /* Previne scroll no body */
+            user-select: none;
+        }
+
+        /* Cores baseadas nas imagens */
+        .bg-panel { background-color: #1e1e24; }
+        .bg-toolbar { background-color: #18181b; }
+        .text-purple-brand { color: #a855f7; }
+        .bg-purple-brand { background-color: #9333ea; }
+        .bg-purple-brand:hover { background-color: #a855f7; }
+
+        /* Estilo do fundo xadrez do Canvas para indicar transparência */
+        .checkerboard-bg {
+            background-image: 
+                linear-gradient(45deg, #2a2a30 25%, transparent 25%, transparent 75%, #2a2a30 75%, #2a2a30),
+                linear-gradient(45deg, #2a2a30 25%, transparent 25%, transparent 75%, #2a2a30 75%, #2a2a30);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            background-color: #1e1e24;
+        }
+
+        /* Canvas nítido para pixel art */
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            cursor: crosshair;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #18181b; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+        /* Estilo de ferramentas ativas */
+        .tool-btn {
+            display: flex; align-items: center; justify-content: center;
+            width: 26px; height: 26px; border-radius: 6px;
+            color: #a1a1aa; transition: all 0.2s;
+        }
+        .tool-btn:hover { background-color: #27272a; color: white; }
+        .tool-btn.active {
+            background-color: #9333ea; color: white;
+            box-shadow: 0 0 10px rgba(147, 51, 234, 0.5);
+        }
+
+        /* Switch Customizado */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #9333ea;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #9333ea;
+        }
+
+        /* Input type color escondido */
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+        /* Modal customizado (substitui alert) */
+        #toast-container {
+            position: fixed; bottom: 20px; right: 20px; z-index: 50;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .toast {
+            background: #27272a; border-left: 4px solid #9333ea;
+            color: white; padding: 12px 20px; border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            animation: slideIn 0.3s ease-out forwards, fadeOut 0.3s ease-in 2.7s forwards;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- HEADER -->
+    <header class="bg-panel border-b border-gray-800 h-10 flex items-center px-4 flex-shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-6 h-6 rounded-full bg-[#3b2d59] flex items-center justify-center">
+                <div class="w-3 h-3 rounded-full bg-purple-500"></div>
+            </div>
+            <h1 class="text-base font-bold text-white tracking-wide">Studio de Pixel Art do Lucão</h1>
+            <span class="text-xs text-gray-500 ml-2" id="header-grid-info">16×16</span>
+        </div>
+        
+        <div class="flex ml-8 gap-1 bg-[#18181b] p-0.5 rounded-md">
+            <button class="px-4 py-1 rounded bg-purple-brand text-white font-medium text-xs transition" id="tab-studio">Studio</button>
+            <button class="px-4 py-1 rounded text-gray-400 hover:text-white font-medium text-xs transition" id="tab-timeline">Timeline</button>
+        </div>
+    </header>
+
+    <!-- TOOLBAR -->
+    <nav class="bg-toolbar border-b border-gray-800 min-h-[40px] h-auto flex flex-wrap items-center px-2 py-1 gap-2 flex-shrink-0 text-sm z-20 relative">
+        <!-- Ações de Arquivo -->
+        <div class="flex gap-0.5 border-r border-gray-700 pr-2">
+            <button class="tool-btn" title="Nova Arte (Limpar)" onclick="newArt()">
+                <i class="ph ph-file-plus text-base"></i>
+            </button>
+            
+            <button class="tool-btn" title="Baixar Arte" onclick="downloadArt()">
+                <i class="ph ph-download-simple text-base"></i>
+            </button>
+
+            <label class="tool-btn cursor-pointer" title="Importar Arte">
+                <i class="ph ph-upload-simple text-base"></i>
+                <input type="file" id="import-btn" accept="image/png, image/jpeg" class="hidden" onchange="importArt(event)">
+            </label>
+        </div>
+
+        <!-- Histórico -->
+        <div class="flex gap-0.5 border-r border-gray-700 pr-2">
+            <button class="tool-btn" title="Desfazer (Z)" onclick="undo()">
+                <i class="ph ph-arrow-u-up-left text-base"></i>
+            </button>
+            <button class="tool-btn" title="Refazer (X)" onclick="redo()">
+                <i class="ph ph-arrow-u-up-right text-base"></i>
+            </button>
+        </div>
+
+        <!-- Ferramentas Principais -->
+        <div class="flex gap-0.5 border-r border-gray-700 pr-2">
+            <button class="tool-btn active" data-tool="pencil" title="Lápis" onclick="setTool('pencil')">
+                <i class="ph ph-pencil-simple text-base"></i>
+            </button>
+            <button class="tool-btn" data-tool="eraser" title="Borracha" onclick="setTool('eraser')">
+                <i class="ph ph-eraser text-base"></i>
+            </button>
+            <button class="tool-btn" data-tool="bucket" title="Balde de Tinta" onclick="setTool('bucket')">
+                <i class="ph ph-paint-bucket text-base"></i>
+            </button>
+            <button class="tool-btn" data-tool="picker" title="Conta-gotas" onclick="setTool('picker')">
+                <i class="ph ph-eyedropper text-base"></i>
+            </button>
+        </div>
+
+        <!-- Formas -->
+        <div class="flex gap-0.5 border-r border-gray-700 pr-2 items-center">
+            <div class="relative group">
+                <button class="flex items-center gap-1 px-2 py-1 rounded hover:bg-[#27272a] text-gray-400 hover:text-white transition text-xs">
+                    <i class="ph ph-square text-base"></i>
+                    <span>Formas</span>
+                </button>
+                <div class="absolute top-full left-0 mt-1 bg-[#27272a] rounded shadow-lg hidden group-hover:flex flex-col p-1 z-10 w-28 border border-gray-700">
+                    <button class="flex items-center gap-2 p-1.5 hover:bg-gray-700 rounded text-left text-xs" onclick="setTool('rect')"><i class="ph ph-square"></i> Quadrado</button>
+                    <button class="flex items-center gap-2 p-1.5 hover:bg-gray-700 rounded text-left text-xs" onclick="setTool('circle')"><i class="ph ph-circle"></i> Círculo</button>
+                    <button class="flex items-center gap-2 p-1.5 hover:bg-gray-700 rounded text-left text-xs" onclick="setTool('line')"><i class="ph ph-line-segment"></i> Linha</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configurações de Grid & Exportação -->
+        <div class="flex gap-3 items-center pl-1">
+            <button id="toggle-grid-btn" class="flex items-center gap-1 px-2 py-1 rounded bg-[#27272a] hover:bg-gray-700 transition" onclick="toggleVisualGrid()">
+                <i class="ph ph-grid-four text-base text-yellow-500"></i>
+                <span class="font-medium text-white text-xs">Grid</span>
+            </button>
+
+            <!-- Switch C/ Grid -->
+            <div class="flex items-center gap-1.5">
+                <div class="relative inline-block w-8 mr-1 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" name="toggle" id="export-grid-toggle" class="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-500 z-10 top-0 left-0 transition-all duration-200" checked/>
+                    <label for="export-grid-toggle" class="toggle-label block overflow-hidden h-4 rounded-full bg-gray-500 cursor-pointer"></label>
+                </div>
+                <label for="export-grid-toggle" class="text-[10px] text-gray-400 cursor-pointer">C/ grid</label>
+            </div>
+
+            <!-- Switch PNG (Transparente/Branco) -->
+            <div class="flex items-center gap-1.5 ml-2 border-l border-gray-700 pl-3">
+                <div class="relative inline-block w-8 mr-1 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" name="toggle" id="export-png-toggle" class="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-500 z-10 top-0 left-0 transition-all duration-200" checked/>
+                    <label for="export-png-toggle" class="toggle-label block overflow-hidden h-4 rounded-full bg-gray-500 cursor-pointer"></label>
+                </div>
+                <label for="export-png-toggle" class="text-[10px] text-gray-400 cursor-pointer">PNG</label>
+            </div>
+
+            <!-- Custom Size Dropdown -->
+            <div class="relative">
+                <select id="grid-size-select" class="appearance-none bg-[#27272a] text-white py-1 pl-2 pr-6 rounded outline-none border border-gray-700 hover:border-gray-500 cursor-pointer text-xs" onchange="changeGridSize(this.value)">
+                    <option value="16">16×16</option>
+                    <option value="32">32×32</option>
+                    <option value="64">64×64</option>
+                    <option value="custom">Customizado</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-gray-400">
+                    <i class="ph ph-caret-down text-xs"></i>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN AREA -->
+    <main class="flex-1 flex overflow-hidden relative flex-row w-full min-w-0">
+        
+        <!-- Left Column (Canvas + Timeline) -->
+        <div class="flex-1 flex flex-col min-w-0 relative">
+            <!-- Zoom Info -->
+            <div class="absolute top-4 left-4 z-10 bg-[#18181b] px-2 py-1 rounded text-xs text-gray-400 border border-gray-700 opacity-80" id="zoom-info">
+                100%
+            </div>
+
+            <!-- Editor/Canvas Container -->
+            <div id="canvas-wrapper" class="flex-1 bg-[#121214] flex items-center justify-center overflow-auto relative p-8">
+                <canvas id="editor" class="checkerboard-bg rounded-sm"></canvas>
+            </div>
+
+            <!-- TIMELINE TAB (Embaixo do Canvas) -->
+            <footer id="timeline-section" class="h-32 bg-panel border-t border-gray-800 hidden flex-col flex-shrink-0">
+                <div class="flex items-center justify-between px-4 py-1.5 border-b border-gray-800 bg-[#18181b]">
+                    <div class="flex items-center gap-4">
+                        <span class="text-xs font-medium text-gray-300">Frames de Animação</span>
+                        <div class="flex items-center gap-1 border-l border-gray-700 pl-4">
+                            <button id="play-btn" class="w-7 h-7 bg-[#27272a] hover:bg-gray-700 rounded flex items-center justify-center text-white transition" onclick="togglePlay()">
+                                <i class="ph ph-play text-sm"></i>
+                            </button>
+                            <label class="text-[10px] text-gray-400 ml-2">FPS:</label>
+                            <input type="number" id="fps-input" value="5" min="1" max="30" class="w-12 bg-[#121214] border border-gray-700 rounded px-1.5 py-0.5 text-xs text-white outline-none">
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="text-xs bg-[#27272a] hover:bg-gray-700 px-3 py-1 rounded text-white transition flex items-center gap-1 border border-gray-700" onclick="addFrame(false)">
+                            <i class="ph ph-copy"></i> Duplicar
+                        </button>
+                        <button class="text-xs bg-purple-brand hover:bg-purple-500 px-3 py-1 rounded text-white transition flex items-center gap-1" onclick="addFrame(true)">
+                            <i class="ph ph-plus"></i> Novo Frame
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1 flex items-center gap-3 px-4 overflow-x-auto" id="frames-container">
+                    <!-- Frames gerados via JS -->
+                </div>
+            </footer>
+        </div>
+
+        <!-- RIGHT SIDEBAR (Paleta) -->
+        <aside class="w-64 bg-panel border-l border-gray-800 flex flex-col flex-shrink-0 p-4 overflow-y-auto">
+            
+            <!-- Cor Atual -->
+            <div class="mb-6">
+                <span class="text-xs text-gray-400 mb-2 block">Cor Atual</span>
+                <div class="flex items-center gap-3">
+                    <div id="current-color-display" class="w-12 h-12 rounded-md shadow-inner border border-gray-700" style="background-color: #a855f7;"></div>
+                    <span id="current-color-hex" class="text-sm font-mono bg-[#18181b] px-2 py-1 rounded border border-gray-700">#a855f7</span>
+                </div>
+            </div>
+
+            <!-- Selecionar Cor -->
+            <div class="mb-6">
+                <span class="text-xs text-gray-400 mb-2 block">Selecionar Cor</span>
+                <div class="flex gap-2">
+                    <div class="relative w-12 h-10 rounded-md overflow-hidden border border-gray-700 flex-shrink-0">
+                        <input type="color" id="color-picker-input" class="absolute -top-2 -left-2 w-16 h-16 cursor-pointer" value="#a855f7" onchange="updateSelectedColor(this.value)">
+                    </div>
+                    <button class="flex-1 bg-purple-brand hover:bg-purple-500 transition text-white rounded-md text-sm font-medium flex items-center justify-center gap-1" onclick="addColorToPalette()">
+                        <i class="ph ph-plus font-bold"></i> Criar Cor
+                    </button>
+                </div>
+            </div>
+
+            <!-- Paleta Predefinida -->
+            <div class="mb-6">
+                <span class="text-xs text-gray-400 mb-2 block">Paleta</span>
+                <div class="flex flex-wrap gap-2" id="main-palette">
+                    <!-- Gerado via JS -->
+                </div>
+            </div>
+
+            <!-- Recentes -->
+            <div>
+                <span class="text-xs text-gray-400 mb-2 block">Recentes</span>
+                <div class="flex flex-wrap gap-2" id="recent-palette">
+                    <!-- Gerado via JS -->
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- MODAL CUSTOMIZADO PARA INPUT -->
+    <div id="custom-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden z-50">
+        <div class="bg-panel p-6 rounded-lg border border-gray-700 shadow-xl w-80">
+            <h3 class="text-lg text-white font-medium mb-4" id="modal-title">Tamanho Customizado</h3>
+            <div class="flex items-center gap-4 mb-6">
+                <input type="number" id="modal-input-w" class="w-full bg-[#18181b] border border-gray-600 rounded px-3 py-2 text-white outline-none focus:border-purple-500" placeholder="Largura">
+                <span class="text-gray-400">X</span>
+                <input type="number" id="modal-input-h" class="w-full bg-[#18181b] border border-gray-600 rounded px-3 py-2 text-white outline-none focus:border-purple-500" placeholder="Altura">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button class="px-4 py-2 text-sm text-gray-400 hover:text-white" onclick="closeModal()">Cancelar</button>
+                <button class="px-4 py-2 text-sm bg-purple-brand text-white rounded hover:bg-purple-500" onclick="confirmModal()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- ESTADO DA APLICAÇÃO ---
+    let gridSizeW = 16;
+    let gridSizeH = 16;
+    let frames = [];
+    let currentFrameIndex = 0;
+    let pixels = []; // Referência para a matriz do frame atual
+    let isPlaying = false;
+    let playInterval = null;
+    
+    // Configurações Visuais
+    let displaySize = 512; // Tamanho base em tela (responsivo depois)
+    let showGridLines = true;
+    let currentColor = '#a855f7';
+    let currentTool = 'pencil'; // pencil, eraser, bucket, picker, rect, circle, line
+    
+    // Histórico para Undo/Redo
+    let history = [];
+    let historyIndex = -1;
+    const maxHistory = 50;
+
+    // Variáveis de Interação
+    let isDrawing = false;
+    let startX = -1, startY = -1;
+    let previewPixels = null; // Para formas temporárias
+
+    // Elementos DOM
+    const canvas = document.getElementById('editor');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const wrapper = document.getElementById('canvas-wrapper');
+    const colorDisplay = document.getElementById('current-color-display');
+    const colorHexText = document.getElementById('current-color-hex');
+    const colorInput = document.getElementById('color-picker-input');
+
+    // Paleta de Cores Padrão
+    const defaultPalette = [
+        '#ffffff', '#000000', '#333333', '#888888', '#ff4500', '#ffa500', '#ffd700', 
+        '#32cd32', '#008000', '#00ced1', '#1e90ff', '#0000cd', '#8a2be2', '#ff1493',
+        '#8b4513', '#d2b48c', '#ffb6c1', '#f0e68c', '#e6e6fa', '#98fb98', '#afeeee'
+    ];
+    let recentColors = ['#a855f7', '#86864b', '#1e90ff', '#ff4500'];
+
+    // --- INICIALIZAÇÃO ---
+    function init() {
+        initGrid(gridSizeW, gridSizeH);
+        buildPalette();
+        buildRecentPalette();
+        updateColorUI(currentColor);
+        resizeCanvasDisplay();
+        
+        // Event Listeners da Janela
+        window.addEventListener('resize', resizeCanvasDisplay);
+        
+        // Teclas de atalho
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) { // Suporte extra pra Ctrl+Z se o usuário preferir
+                if (e.key === 'z') { e.preventDefault(); undo(); }
+                if (e.key === 'y') { e.preventDefault(); redo(); }
+            }
+            if (e.key.toLowerCase() === 'z' && !e.ctrlKey) undo();
+            if (e.key.toLowerCase() === 'x' && !e.ctrlKey) redo();
+        });
+
+        // Tabs
+        document.getElementById('tab-studio').addEventListener('click', () => switchTab('studio'));
+        document.getElementById('tab-timeline').addEventListener('click', () => switchTab('timeline'));
+
+        // Prevenir context menu no canvas
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Eventos do Mouse no Canvas
+        canvas.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('mousemove', handlePointerMove); // Escutar no window para arrasto fora
+        window.addEventListener('mouseup', handlePointerUp);
+        
+        // Suporte a Touch
+        canvas.addEventListener('touchstart', handleTouchDown, {passive: false});
+        window.addEventListener('touchmove', handleTouchMove, {passive: false});
+        window.addEventListener('touchend', handleTouchUp);
+    }
+
+    function initGrid(w, h) {
+        gridSizeW = w;
+        gridSizeH = h;
+        frames = [createEmptyFrame()];
+        currentFrameIndex = 0;
+        pixels = frames[0];
+        document.getElementById('header-grid-info').textContent = `${w}×${h}`;
+        
+        // Reset History
+        history = [];
+        historyIndex = -1;
+        saveState();
+        
+        updateTimelineUI();
+        resizeCanvasDisplay();
+    }
+
+    function createEmptyFrame() {
+        return Array(gridSizeH).fill().map(() => Array(gridSizeW).fill(null));
+    }
+
+    // --- RENDERIZAÇÃO ---
+    function resizeCanvasDisplay() {
+        // Define o tamanho lógico do canvas
+        canvas.width = gridSizeW;
+        canvas.height = gridSizeH;
+        
+        // Calcula o tamanho de exibição para manter proporção e caber na tela
+        const padding = 60;
+        const availableW = wrapper.clientWidth - padding;
+        const availableH = wrapper.clientHeight - padding;
+        
+        const scaleW = availableW / gridSizeW;
+        const scaleH = availableH / gridSizeH;
+        const scale = Math.max(1, Math.floor(Math.min(scaleW, scaleH))); // Apenas escalas inteiras para pixel perfect ou no mínimo 1
+
+        const displayW = gridSizeW * scale;
+        const displayH = gridSizeH * scale;
+
+        canvas.style.width = `${displayW}px`;
+        canvas.style.height = `${displayH}px`;
+        
+        document.getElementById('zoom-info').textContent = `${scale * 100}%`;
+
+        render();
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Desenha pixels da matriz principal
+        for (let y = 0; y < gridSizeH; y++) {
+            for (let x = 0; x < gridSizeW; x++) {
+                if (pixels[y][x]) {
+                    ctx.fillStyle = pixels[y][x];
+                    ctx.fillRect(x, y, 1, 1);
+                }
+            }
+        }
+
+        // Desenha preview de formas temporárias
+        if (previewPixels) {
+            for (let y = 0; y < gridSizeH; y++) {
+                for (let x = 0; x < gridSizeW; x++) {
+                    if (previewPixels[y] && previewPixels[y][x]) {
+                        ctx.fillStyle = previewPixels[y][x];
+                        ctx.fillRect(x, y, 1, 1);
+                    }
+                }
+            }
+        }
+
+        // Desenha Grid Visual (se ativo)
+        if (showGridLines) {
+            ctx.fillStyle = 'rgba(128, 128, 128, 0.2)'; // Cor sutil do grid
+            for (let x = 1; x < gridSizeW; x++) {
+                ctx.fillRect(x, 0, 0.05, gridSizeH); // Linha fina 
+            }
+            for (let y = 1; y < gridSizeH; y++) {
+                ctx.fillRect(0, y, gridSizeW, 0.05);
+            }
+        }
+    }
+
+    // --- INTERAÇÃO (MOUSE/TOUCH) ---
+    function getCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        let clientX = e.clientX;
+        let clientY = e.clientY;
+        
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        }
+
+        // Escala os clicks do tamanho visual para o tamanho lógico
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        let x = Math.floor((clientX - rect.left) * scaleX);
+        let y = Math.floor((clientY - rect.top) * scaleY);
+        
+        return { x, y };
+    }
+
+    let isErasing = false;
+
+    function handlePointerDown(e) {
+        if(e.type === 'touchstart') e.preventDefault(); // Previne scroll
+        isDrawing = true;
+        const coords = getCoords(e);
+        
+        // Define se está apagando com base no botão do mouse ou ferramenta
+        // e.button === 2 é clique direito
+        isErasing = (e.button === 2) || currentTool === 'eraser';
+
+        startX = coords.x;
+        startY = coords.y;
+
+        applyTool(coords.x, coords.y);
+    }
+
+    function handlePointerMove(e) {
+        if (!isDrawing) return;
+        const coords = getCoords(e);
+        
+        // Verifica se saiu dos limites na hora de pintar, mas não de visualizar preview
+        const inBounds = coords.x >= 0 && coords.x < gridSizeW && coords.y >= 0 && coords.y < gridSizeH;
+
+        if (currentTool === 'rect' || currentTool === 'circle' || currentTool === 'line') {
+            generateShapePreview(startX, startY, coords.x, coords.y);
+            render();
+        } else if (inBounds) {
+             applyTool(coords.x, coords.y);
+        }
+    }
+
+    function handlePointerUp(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        
+        if (previewPixels) {
+            // Consolida o preview na matriz principal
+            for (let y = 0; y < gridSizeH; y++) {
+                for (let x = 0; x < gridSizeW; x++) {
+                    if (previewPixels[y] && previewPixels[y][x]) {
+                        pixels[y][x] = previewPixels[y][x];
+                    }
+                }
+            }
+            previewPixels = null;
+            saveState();
+            render();
+        } else {
+            // Para lápis e borracha, salva no up
+            saveState();
+        }
+    }
+
+    // Adaptadores para Touch
+    function handleTouchDown(e) { handlePointerDown(e); }
+    function handleTouchMove(e) { handlePointerMove(e); }
+    function handleTouchUp(e) { handlePointerUp(e); }
+
+
+    // --- LÓGICA DAS FERRAMENTAS ---
+    function applyTool(x, y) {
+        if (x < 0 || x >= gridSizeW || y < 0 || y >= gridSizeH) return;
+
+        if (currentTool === 'picker') {
+            const color = pixels[y][x];
+            if (color) updateColorUI(color);
+            return;
+        }
+
+        if (currentTool === 'pencil' || currentTool === 'eraser') {
+            const colorToApply = isErasing ? null : currentColor;
+            if (pixels[y][x] !== colorToApply) {
+                pixels[y][x] = colorToApply;
+                render();
+            }
+        } 
+        else if (currentTool === 'bucket' && isDrawing && x===startX && y===startY) {
+            // Bucket só aplica no primeiro click (mousedown), não no move
+            floodFill(x, y, isErasing ? null : currentColor);
+            saveState(); // Salva estado imediatamente após o balde
+            isDrawing = false; // Interrompe 'arrasto' do balde
+        }
+    }
+
+    function floodFill(startX, startY, targetColor) {
+        const startColor = pixels[startY][startX];
+        if (startColor === targetColor) return;
+
+        const queue = [{x: startX, y: startY}];
+        
+        while (queue.length > 0) {
+            const {x, y} = queue.shift();
+            
+            if (x < 0 || x >= gridSizeW || y < 0 || y >= gridSizeH) continue;
+            if (pixels[y][x] !== startColor) continue;
+
+            pixels[y][x] = targetColor;
+
+            queue.push({x: x + 1, y});
+            queue.push({x: x - 1, y});
+            queue.push({x, y: y + 1});
+            queue.push({x, y: y - 1});
+        }
+        render();
+    }
+
+    function generateShapePreview(x1, y1, x2, y2) {
+        previewPixels = Array(gridSizeH).fill().map(() => Array(gridSizeW).fill(null));
+        const color = isErasing ? null : currentColor;
+        
+        // Clampa coordenadas pro limite (permite arrastar fora, mas desenha dentro)
+        x2 = Math.max(0, Math.min(x2, gridSizeW - 1));
+        y2 = Math.max(0, Math.min(y2, gridSizeH - 1));
+        x1 = Math.max(0, Math.min(x1, gridSizeW - 1));
+        y1 = Math.max(0, Math.min(y1, gridSizeH - 1));
+
+        if (currentTool === 'rect') {
+            const startX = Math.min(x1, x2);
+            const startY = Math.min(y1, y2);
+            const endX = Math.max(x1, x2);
+            const endY = Math.max(y1, y2);
+
+            for (let y = startY; y <= endY; y++) {
+                for (let x = startX; x <= endX; x++) {
+                    // Contorno ou preenchido? Vamos fazer contorno básico primeiro
+                    if (y === startY || y === endY || x === startX || x === endX) {
+                        previewPixels[y][x] = color;
+                    }
+                }
+            }
+        } 
+        else if (currentTool === 'line') {
+            // Algoritmo de Bresenham
+            let dx = Math.abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
+            let dy = Math.abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
+            let err = (dx > dy ? dx : -dy) / 2;
+            
+            let cx = x1, cy = y1;
+            while (true) {
+                previewPixels[cy][cx] = color;
+                if (cx === x2 && cy === y2) break;
+                let e2 = err;
+                if (e2 > -dx) { err -= dy; cx += sx; }
+                if (e2 < dy) { err += dx; cy += sy; }
+            }
+        }
+        else if (currentTool === 'circle') {
+             // Círculo simples usando distância
+             const cx = Math.floor((x1 + x2) / 2);
+             const cy = Math.floor((y1 + y2) / 2);
+             const r = Math.floor(Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2)) / 2);
+             
+             for(let y=0; y<gridSizeH; y++){
+                 for(let x=0; x<gridSizeW; x++){
+                     const dist = Math.sqrt(Math.pow(x - cx, 2) + Math.pow(y - cy, 2));
+                     // Contorno aproximado
+                     if (Math.abs(dist - r) < 0.8) {
+                        previewPixels[y][x] = color;
+                     }
+                 }
+             }
+        }
+    }
+
+
+    // --- CONTROLE DE ESTADO & UI ---
+    function setTool(toolName) {
+        currentTool = toolName;
+        document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = document.querySelector(`.tool-btn[data-tool="${toolName}"]`);
+        if(activeBtn) activeBtn.classList.add('active');
+    }
+
+    function toggleVisualGrid() {
+        showGridLines = !showGridLines;
+        const btn = document.getElementById('toggle-grid-btn');
+        if (showGridLines) {
+            btn.classList.add('bg-gray-700');
+            btn.classList.remove('bg-[#27272a]');
+        } else {
+            btn.classList.remove('bg-gray-700');
+            btn.classList.add('bg-[#27272a]');
+        }
+        render();
+    }
+
+    function newArt() {
+        if(confirm("Tem certeza que deseja limpar o canvas?")) {
+            initGrid(gridSizeW, gridSizeH);
+            showToast("Novo canvas criado");
+        }
+    }
+
+    function changeGridSize(val) {
+        if (val === 'custom') {
+            document.getElementById('custom-modal').classList.remove('hidden');
+        } else {
+            let size = parseInt(val);
+            if(confirm(`Redimensionar apagará a arte atual. Confirmar?`)){
+                initGrid(size, size);
+            } else {
+                document.getElementById('grid-size-select').value = gridSizeW; // reverta
+            }
+        }
+    }
+
+    // Modal Customizado
+    function closeModal() {
+        document.getElementById('custom-modal').classList.add('hidden');
+        document.getElementById('grid-size-select').value = gridSizeW; // reseta select
+    }
+    function confirmModal() {
+        const w = parseInt(document.getElementById('modal-input-w').value);
+        const h = parseInt(document.getElementById('modal-input-h').value);
+        if (w > 0 && h > 0 && w <= 256 && h <= 256) {
+             if(confirm(`Redimensionar apagará a arte atual. Confirmar?`)){
+                 initGrid(w, h);
+                 closeModal();
+             }
+        } else {
+            showToast("Dimensões inválidas (Max 256)");
+        }
+    }
+
+
+    // --- HISTÓRICO (UNDO / REDO) ---
+    function saveState() {
+        // Corta histórico futuro se estamos no meio dele e fazemos nova ação
+        if (historyIndex < history.length - 1) {
+            history = history.slice(0, historyIndex + 1);
+        }
+        
+        // Deep copy
+        const snapshot = pixels.map(row => [...row]);
+        history.push(snapshot);
+        
+        if (history.length > maxHistory) history.shift();
+        else historyIndex++;
+
+        // Atualiza a thumbnail correspondente na timeline
+        if(typeof updateFrameThumbnail === 'function') {
+            updateFrameThumbnail(currentFrameIndex);
+        }
+    }
+
+    function undo() {
+        if (historyIndex > 0) {
+            historyIndex--;
+            pixels = history[historyIndex].map(row => [...row]);
+            render();
+            showToast("Desfazer");
+        }
+    }
+
+    function redo() {
+        if (historyIndex < history.length - 1) {
+            historyIndex++;
+            pixels = history[historyIndex].map(row => [...row]);
+            render();
+            showToast("Refazer");
+        }
+    }
+
+    // --- CORES ---
+    function updateColorUI(colorHex) {
+        currentColor = colorHex;
+        colorDisplay.style.backgroundColor = colorHex;
+        colorHexText.textContent = colorHex;
+        colorInput.value = colorHex;
+        addToRecent(colorHex);
+    }
+
+    function updateSelectedColor(val) {
+        updateColorUI(val);
+    }
+
+    function addColorToPalette() {
+        const color = colorInput.value;
+        updateColorUI(color);
+        showToast("Cor adicionada às recentes");
+    }
+
+    function buildPalette() {
+        const container = document.getElementById('main-palette');
+        container.innerHTML = '';
+        defaultPalette.forEach(color => {
+            const div = document.createElement('div');
+            div.className = 'w-6 h-6 rounded-full cursor-pointer hover:scale-110 transition border border-gray-700';
+            div.style.backgroundColor = color;
+            div.onclick = () => updateColorUI(color);
+            container.appendChild(div);
+        });
+    }
+
+    function buildRecentPalette() {
+        const container = document.getElementById('recent-palette');
+        container.innerHTML = '';
+        recentColors.forEach(color => {
+            const div = document.createElement('div');
+            div.className = 'w-8 h-8 rounded-md cursor-pointer hover:scale-110 transition border border-gray-700';
+            div.style.backgroundColor = color;
+            div.onclick = () => updateColorUI(color);
+            container.appendChild(div);
+        });
+    }
+
+    function addToRecent(color) {
+        if (!recentColors.includes(color)) {
+            recentColors.unshift(color);
+            if (recentColors.length > 10) recentColors.pop();
+            buildRecentPalette();
+        }
+    }
+
+    // --- IMPORT / EXPORT ---
+    function downloadArt() {
+        const withGrid = document.getElementById('export-grid-toggle').checked;
+        const isTransparent = document.getElementById('export-png-toggle').checked;
+        const bgType = isTransparent ? 'transparent' : 'white';
+        const scale = 50; // Upscale ultra-alto para máxima nitidez (50x)
+        
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = gridSizeW * scale;
+        exportCanvas.height = gridSizeH * scale;
+        const eCtx = exportCanvas.getContext('2d');
+        
+        // Desativar completamente a suavização em todos os motores
+        eCtx.imageSmoothingEnabled = false;
+        eCtx.webkitImageSmoothingEnabled = false;
+        eCtx.mozImageSmoothingEnabled = false;
+        eCtx.msImageSmoothingEnabled = false;
+
+        // Limpa o canvas para garantir transparência real
+        eCtx.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+        // Preenche fundo se a opção "Fundo Branco" for selecionada
+        if (bgType === 'white') {
+            eCtx.fillStyle = '#ffffff';
+            eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+        }
+
+        // Desenha pixels da arte desenhando retângulos perfeitamente nítidos
+        for (let y = 0; y < gridSizeH; y++) {
+            for (let x = 0; x < gridSizeW; x++) {
+                if (pixels[y][x]) {
+                    eCtx.fillStyle = pixels[y][x];
+                    eCtx.fillRect(Math.floor(x * scale), Math.floor(y * scale), scale, scale);
+                }
+            }
+        }
+
+        // Desenha Grid se solicitado pelo switch (mais suave no fundo branco)
+        if (withGrid) {
+            eCtx.fillStyle = bgType === 'white' ? 'rgba(0, 0, 0, 0.15)' : 'rgba(0, 0, 0, 0.3)';
+            for (let x = 1; x < gridSizeW; x++) {
+                eCtx.fillRect(Math.floor(x * scale), 0, 1, exportCanvas.height);
+            }
+            for (let y = 1; y < gridSizeH; y++) {
+                eCtx.fillRect(0, Math.floor(y * scale), exportCanvas.width, 1);
+            }
+        }
+
+        // Realiza o download via link
+        const link = document.createElement('a');
+        link.download = `pixel-art-${bgType}-${Date.now()}.png`;
+        link.href = exportCanvas.toDataURL('image/png');
+        
+        // Adiciona ao DOM temporariamente para compatibilidade em todos os navegadores
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast("Arte baixada com sucesso!");
+    }
+
+    function importArt(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                // Redimensiona imagem para o grid atual
+                const tempC = document.createElement('canvas');
+                tempC.width = gridSizeW;
+                tempC.height = gridSizeH;
+                const tCtx = tempC.getContext('2d');
+                
+                // Desenha achatando/esticando para caber
+                tCtx.drawImage(img, 0, 0, gridSizeW, gridSizeH);
+                
+                const imgData = tCtx.getImageData(0, 0, gridSizeW, gridSizeH).data;
+                
+                for(let y=0; y<gridSizeH; y++){
+                    for(let x=0; x<gridSizeW; x++){
+                        const i = (y * gridSizeW + x) * 4;
+                        const a = imgData[i+3];
+                        if (a > 10) { // Limiar de alpha
+                            // Converte rgb pra hex para manter padrão
+                            const r = imgData[i].toString(16).padStart(2,'0');
+                            const g = imgData[i+1].toString(16).padStart(2,'0');
+                            const b = imgData[i+2].toString(16).padStart(2,'0');
+                            pixels[y][x] = `#${r}${g}${b}`;
+                        } else {
+                            pixels[y][x] = null;
+                        }
+                    }
+                }
+                saveState();
+                render();
+                showToast("Arte importada e redimensionada");
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = ''; // Reseta input
+    }
+
+
+    // --- TIMELINE (Funcional e Otimizada) ---
+    function switchTab(tab) {
+        const btnStudio = document.getElementById('tab-studio');
+        const btnTimeline = document.getElementById('tab-timeline');
+        const timelineSec = document.getElementById('timeline-section');
+        
+        if (tab === 'studio') {
+            btnStudio.classList.replace('text-gray-400', 'text-white');
+            btnStudio.classList.replace('hover:text-white', 'bg-purple-brand');
+            btnStudio.classList.add('bg-purple-brand');
+            
+            btnTimeline.classList.remove('bg-purple-brand', 'text-white');
+            btnTimeline.classList.add('text-gray-400', 'hover:text-white');
+            
+            timelineSec.classList.add('hidden');
+            timelineSec.classList.remove('flex');
+        } else {
+            btnTimeline.classList.replace('text-gray-400', 'text-white');
+            btnTimeline.classList.replace('hover:text-white', 'bg-purple-brand');
+            btnTimeline.classList.add('bg-purple-brand');
+
+            btnStudio.classList.remove('bg-purple-brand', 'text-white');
+            btnStudio.classList.add('text-gray-400', 'hover:text-white');
+            
+            timelineSec.classList.remove('hidden');
+            timelineSec.classList.add('flex');
+
+            updateTimelineUI(); // Garante que as miniaturas estão atualizadas ao abrir
+        }
+        // Dispara resize para ajustar canvas ao novo espaço disponível
+        setTimeout(resizeCanvasDisplay, 50);
+    }
+
+    function updateTimelineUI() {
+        const container = document.getElementById('frames-container');
+        if(!container) return;
+        container.innerHTML = '';
+        
+        frames.forEach((f, idx) => {
+            const frameDiv = document.createElement('div');
+            frameDiv.className = `w-16 h-16 bg-[#121214] border-2 cursor-pointer rounded flex-shrink-0 relative group transition-colors ${idx === currentFrameIndex ? 'border-purple-500' : 'border-gray-700 hover:border-gray-500'}`;
+            frameDiv.onclick = () => selectFrame(idx);
+            
+            const canvasThumb = document.createElement('canvas');
+            canvasThumb.width = gridSizeW;
+            canvasThumb.height = gridSizeH;
+            canvasThumb.id = `thumb-${idx}`;
+            canvasThumb.className = 'w-full h-full object-contain p-1';
+            canvasThumb.style.imageRendering = 'pixelated';
+            
+            const number = document.createElement('span');
+            number.className = 'absolute bottom-0.5 right-0.5 bg-black/80 text-white text-[9px] px-1 rounded font-mono';
+            number.textContent = idx + 1;
+
+            // Delete button (Apenas se houver mais de um frame)
+            if (frames.length > 1) {
+                const delBtn = document.createElement('button');
+                delBtn.className = 'absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full hidden group-hover:flex items-center justify-center shadow-lg';
+                delBtn.innerHTML = '<i class="ph ph-x"></i>';
+                delBtn.onclick = (e) => { e.stopPropagation(); deleteFrame(idx); };
+                frameDiv.appendChild(delBtn);
+            }
+
+            frameDiv.appendChild(canvasThumb);
+            frameDiv.appendChild(number);
+            container.appendChild(frameDiv);
+            
+            renderThumbnail(idx);
+        });
+    }
+
+    function renderThumbnail(idx) {
+        const thumb = document.getElementById(`thumb-${idx}`);
+        if(!thumb) return;
+        const tCtx = thumb.getContext('2d');
+        tCtx.clearRect(0, 0, gridSizeW, gridSizeH);
+        const frameData = frames[idx];
+        for(let y=0; y<gridSizeH; y++){
+            for(let x=0; x<gridSizeW; x++){
+                if(frameData[y][x]){
+                    tCtx.fillStyle = frameData[y][x];
+                    tCtx.fillRect(x,y,1,1);
+                }
+            }
+        }
+    }
+
+    function updateFrameThumbnail(idx) {
+        renderThumbnail(idx);
+    }
+
+    function addFrame(empty = true) {
+        const newFrame = empty ? createEmptyFrame() : frames[currentFrameIndex].map(row => [...row]);
+        frames.push(newFrame);
+        selectFrame(frames.length - 1);
+        // Scroll até o final
+        setTimeout(() => {
+            const container = document.getElementById('frames-container');
+            if(container) container.scrollLeft = container.scrollWidth;
+        }, 50);
+    }
+
+    function selectFrame(idx) {
+        if(isPlaying) togglePlay(); // Para a reprodução ao selecionar manualmente
+        currentFrameIndex = idx;
+        pixels = frames[currentFrameIndex];
+        
+        // Reseta o histórico ao mudar de frame para não misturar desfazer entre frames
+        history = []; 
+        historyIndex = -1; 
+        saveState(); 
+        
+        updateTimelineUI();
+        render();
+    }
+
+    function deleteFrame(idx) {
+        if(confirm("Tem certeza que deseja apagar este frame?")) {
+            frames.splice(idx, 1);
+            if (currentFrameIndex >= frames.length) currentFrameIndex = Math.max(0, frames.length - 1);
+            pixels = frames[currentFrameIndex];
+            
+            history = []; historyIndex = -1; saveState();
+            
+            updateTimelineUI();
+            render();
+        }
+    }
+
+    function togglePlay() {
+        const btn = document.getElementById('play-btn');
+        isPlaying = !isPlaying;
+        
+        if (isPlaying) {
+            btn.innerHTML = '<i class="ph ph-pause text-sm"></i>';
+            btn.classList.add('bg-purple-brand');
+            btn.classList.remove('bg-[#27272a]');
+            
+            const fps = parseInt(document.getElementById('fps-input').value) || 5;
+            
+            playInterval = setInterval(() => {
+                currentFrameIndex = (currentFrameIndex + 1) % frames.length;
+                pixels = frames[currentFrameIndex];
+                render();
+                
+                // Atualiza visualmente o frame selecionado na barra sem reconstruir tudo
+                document.querySelectorAll('#frames-container > div').forEach((div, i) => {
+                    if (i === currentFrameIndex) {
+                        div.classList.add('border-purple-500');
+                        div.classList.remove('border-gray-700');
+                    } else {
+                        div.classList.remove('border-purple-500');
+                        div.classList.add('border-gray-700');
+                    }
+                });
+            }, 1000 / fps);
+        } else {
+            btn.innerHTML = '<i class="ph ph-play text-sm"></i>';
+            btn.classList.remove('bg-purple-brand');
+            btn.classList.add('bg-[#27272a]');
+            clearInterval(playInterval);
+            
+            // Força um rebuild na ui pra ter certeza que está correto
+            updateTimelineUI();
+        }
+    }
+
+    // --- UTILITÁRIOS ---
+    function showToast(msg) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `<span class="text-sm font-medium">${msg}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Inicializa app
+    init();
+
+</script>
+</body>
+</html>
